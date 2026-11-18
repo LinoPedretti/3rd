@@ -31,7 +31,16 @@ function bootstrap(): void {
   const input = new InputManager(canvas);
   const audio = new ProceduralAudio();
 
-  const arena = new ArenaSystem(arenaRenderer.scene);
+  const arena = new ArenaSystem(arenaRenderer.scene, (def) => {
+    arenaRenderer.setEnvironmentPalette(
+      def.skyHex,
+      def.fogNear,
+      def.fogFar,
+      def.sunIntensity,
+      def.hemiSkyHex,
+      def.hemiGroundHex
+    );
+  });
   const vfx = new VFXSystem(arenaRenderer.scene, tpsCamera.camera);
   const combat = new CombatSystem();
   const ai = new AISystem();
@@ -60,11 +69,24 @@ function bootstrap(): void {
     },
     onLoadoutChanged: (charId, batId) => {
       match.fighters[0].setLoadout(charId, batId);
+      if (match.previewingCharacter) {
+        match.fighters[0].triggerPreviewPose();
+      }
     },
     onArenaPreviewChanged: (arenaId) => {
       if (match.state === 'SHOWCASE') {
         arena.loadArena(arenaId);
+        if (match.previewingCharacter) {
+          const topY = arena.platforms.length > 0 ? arena.platforms[0].topY : 0;
+          match.fighters[0].position.y = topY;
+        }
       }
+    },
+    onMenuTabChanged: (tab) => {
+      match.setCharacterPreviewMode(tab === 'CHARACTERS');
+    },
+    onPreviewSlash: () => {
+      match.fighters[0].triggerPreviewPose();
     },
     onReturnToShowcase: () => {
       match.startShowcaseDuel();
@@ -75,7 +97,7 @@ function bootstrap(): void {
     hudRoot,
     () => {
       match.startShowcaseDuel();
-      menu.renderMainMenu();
+      menu.setActiveTab('PLAY');
     },
     () => audio.toggleMute()
   );
@@ -84,7 +106,7 @@ function bootstrap(): void {
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape' && match.state !== 'SHOWCASE' && match.state !== 'MATCH_OVER') {
       match.startShowcaseDuel();
-      menu.renderMainMenu();
+      menu.setActiveTab('PLAY');
     }
   });
 
@@ -147,9 +169,11 @@ function bootstrap(): void {
         floorY
       );
 
-      // Update camera (Orbiting Showcase vs Over-the-Shoulder Third-Person Action Camera)
+      // Update camera (Character Preview Studio vs Orbiting Showcase vs Third-Person Action Camera)
       const mouseDelta = input.consumeMouseDelta();
-      if (match.state === 'SHOWCASE' || match.state === 'MATCH_OVER') {
+      if (match.state === 'SHOWCASE' && match.previewingCharacter) {
+        tpsCamera.updateCharacterPreview(frameDt, player.renderPosition);
+      } else if (match.state === 'SHOWCASE' || match.state === 'MATCH_OVER') {
         tpsCamera.updateShowcase(frameDt, ball.renderPosition);
       } else {
         tpsCamera.updateGameplay(

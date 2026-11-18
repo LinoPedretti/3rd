@@ -190,6 +190,15 @@ export class PlasmaBall {
     scene.add(this.trailMesh);
   }
 
+  public setVisible(visible: boolean): void {
+    this.rootGroup.visible = visible;
+    this.floorRingGroup.visible = visible;
+    this.trailMesh.visible = visible;
+    if (!visible) {
+      this.pathLineMesh.visible = false;
+    }
+  }
+
   public reset(spawnPos: THREE.Vector3, initialDir: THREE.Vector3, targetId: string | null): void {
     this.position.copy(spawnPos);
     this.prevPosition.copy(spawnPos);

@@ -69,6 +69,8 @@ export class MatchDirector {
   public gauntletParryScore = 0;
   public lastMatchSummary: MatchSummaryStats | null = null;
   public autoplayHuman = false;
+  public previewingCharacter = false;
+  private previewSpinYaw = 0.25;
 
   private readonly _camForward = new THREE.Vector3();
   private readonly _camFlatForward = new THREE.Vector3();
@@ -152,15 +154,18 @@ export class MatchDirector {
   }
 
   /**
-   * Starts the live 3D AI vs AI Showcase Duel behind the glassmorphic Main Menu.
+   * Starts the live 3D AI vs AI Showcase Duel behind the Main Menu.
    */
   public startShowcaseDuel(): void {
     this.state = 'SHOWCASE';
+    this.previewingCharacter = false;
     this.input.setPointerLockAllowed(false);
     this.droneGroup.visible = false;
+    this.ball.setVisible(true);
 
     for (let i = 0; i < 4; i++) {
       const f = this.fighters[i];
+      f.emitEvents = false;
       if (i < 2) {
         const angle = i === 0 ? 0 : Math.PI;
         const r = 16.5;
@@ -180,11 +185,39 @@ export class MatchDirector {
     this.ball.reset(this._spawnPos, this._initDir, this.fighters[0].id);
   }
 
+  public setCharacterPreviewMode(enabled: boolean): void {
+    if (this.state !== 'SHOWCASE') return;
+    if (enabled === this.previewingCharacter) return;
+
+    this.previewingCharacter = enabled;
+    if (enabled) {
+      this.ball.setVisible(false);
+      this.previewSpinYaw = 0.28;
+      for (let i = 1; i < this.fighters.length; i++) {
+        this.fighters[i].eliminate();
+      }
+      const centerTopY = this.arena.platforms.length > 0 ? this.arena.platforms[0].topY : 0;
+      const p = this.fighters[0];
+      p.emitEvents = false;
+      p.setLoadout(
+        this.progression.data.equippedCharacter,
+        this.progression.data.equippedBat
+      );
+      this._spawnPos.set(0, centerTopY, 0);
+      p.respawn(this._spawnPos, this.previewSpinYaw);
+      p.triggerPreviewPose();
+    } else {
+      this.startShowcaseDuel();
+    }
+  }
+
   public startMatch(
     mode: GameModeId,
     arenaId: ArenaId,
     difficulty: AIDifficultyId
   ): void {
+    this.previewingCharacter = false;
+    this.ball.setVisible(true);
     this.mode = mode;
     this.difficulty = difficulty;
     this.arena.loadArena(arenaId);
@@ -204,6 +237,7 @@ export class MatchDirector {
 
     for (let i = 0; i < 4; i++) {
       const f = this.fighters[i];
+      f.emitEvents = true;
       f.parriesThisMatch = 0;
       f.eliminationsThisMatch = 0;
       f.clashesThisMatch = 0;
@@ -290,8 +324,31 @@ export class MatchDirector {
       this.peakSpeedThisMatch = this.ball.speed;
     }
 
-    // 1. Live 3D Showcase Mode behind Main Menu
+    // 1. Live 3D Showcase or Character Preview Turntable behind Main Menu
     if (this.state === 'SHOWCASE') {
+      if (this.previewingCharacter) {
+        this.previewSpinYaw += dt * 0.72;
+        const p = this.fighters[0];
+        const centerTopY = this.arena.platforms.length > 0 ? this.arena.platforms[0].topY : 0;
+        p.position.set(0, centerTopY, 0);
+        p.velocity.set(0, 0, 0);
+        this._botMove.set(0, 0, 0);
+        this._botAim.set(-Math.sin(this.previewSpinYaw), 0, -Math.cos(this.previewSpinYaw));
+        p.update(
+          dt,
+          this._botMove,
+          this._botAim,
+          false,
+          this.arena.arenaRadius,
+          this.arena.obstacles,
+          this.arena.platforms,
+          this.arena.jumpPads
+        );
+        this.vfx.update(dt);
+        this.input.update(dt);
+        return;
+      }
+
       for (let i = 0; i < 2; i++) {
         const f = this.fighters[i];
         if (!f.alive) {
@@ -354,11 +411,11 @@ export class MatchDirector {
 
     // Update Endless Gauntlet Drone orbit
     if (this.mode === 'endless_gauntlet') {
-      this.droneAngle += dt * 0.65;
-      const droneR = 11.5;
+      this.droneAngle += dt * 0.55;
+      const droneR = 18.5;
       this.dronePosition.set(
         Math.sin(this.droneAngle) * droneR,
-        2.8 + Math.sin(this.droneAngle * 2.3) * 0.9,
+        2.0 + Math.sin(this.droneAngle * 2.3) * 0.6,
         Math.cos(this.droneAngle) * droneR
       );
       this.droneGroup.position.copy(this.dronePosition);

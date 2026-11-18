@@ -22,6 +22,7 @@ export class ThirdPersonCamera {
   private fovPunch = 0;
   private zoomPunch = 0;
   private showcaseAngle = 0;
+  private previewOrbitAngle = 0;
 
   // Scratch vectors to avoid GC
   private readonly _forward = new THREE.Vector3();
@@ -64,20 +65,52 @@ export class ThirdPersonCamera {
 
   public updateShowcase(dt: number, ballPos: THREE.Vector3): void {
     this.showcaseAngle += dt * 0.22;
-    const radius = 26;
+    const radius = 34;
     this.desiredPos.set(
       Math.cos(this.showcaseAngle) * radius,
-      11.5 + Math.sin(this.showcaseAngle * 1.7) * 2.0,
+      14.5 + Math.sin(this.showcaseAngle * 1.7) * 2.5,
       Math.sin(this.showcaseAngle) * radius
     );
     this.currentPos.lerp(this.desiredPos, Math.min(1, dt * 4));
     this.currentFocus.lerp(
-      this.targetOffset.set(ballPos.x * 0.35, 1.8, ballPos.z * 0.35),
+      this.targetOffset.set(ballPos.x * 0.25, 1.8, ballPos.z * 0.25),
       Math.min(1, dt * 5)
     );
     this.camera.position.copy(this.currentPos);
     this.camera.lookAt(this.currentFocus);
-    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, 64, Math.min(1, dt * 5));
+    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, 60, Math.min(1, dt * 5));
+    this.camera.updateProjectionMatrix();
+  }
+
+  public updateCharacterPreview(dt: number, characterPos: THREE.Vector3): void {
+    this.previewOrbitAngle += dt * 0.35;
+    const dist = 4.2;
+    const sinA = Math.sin(this.previewOrbitAngle) * 0.35; // Gentle front-3/4 sway so face & front details stay visible
+    const cosA = Math.cos(this.previewOrbitAngle * 0.5) * 0.2 + 0.94;
+    const dirLen = Math.hypot(sinA, cosA) || 1;
+    const nx = sinA / dirLen;
+    const nz = cosA / dirLen;
+
+    this.desiredPos.set(
+      characterPos.x + nx * dist,
+      characterPos.y + 1.55,
+      characterPos.z + nz * dist
+    );
+    // Offset look-at slightly left of the fighter (relative to camera view) so the fighter
+    // stands prominently in the right/center-right viewport beside the left-side UI panel.
+    const camRightX = nz;
+    const camRightZ = -nx;
+    this.targetOffset.set(
+      characterPos.x - camRightX * 0.8,
+      characterPos.y + 1.18,
+      characterPos.z - camRightZ * 0.8
+    );
+
+    this.currentPos.lerp(this.desiredPos, Math.min(1, dt * 7));
+    this.currentFocus.lerp(this.targetOffset, Math.min(1, dt * 7));
+    this.camera.position.copy(this.currentPos);
+    this.camera.lookAt(this.currentFocus);
+    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, 48, Math.min(1, dt * 7));
     this.camera.updateProjectionMatrix();
   }
 

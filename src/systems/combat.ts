@@ -60,23 +60,24 @@ export class CombatSystem {
       _fighterTorso.set(f.position.x, f.position.y + 1.15, f.position.z);
       const distToBall = _fighterTorso.distanceTo(ball.position);
 
-      if (f.kineticDomeTimer > 0 && distToBall <= f.getParryReach() + 0.5) {
-        if (ball.lastHitterId !== f.id || ball.targetId === f.id) {
-          this.executeParry(
-            f,
-            ball,
-            fighters,
-            isEndlessGauntlet,
-            dronePosition,
-            vfx,
-            callbacks,
-            true
-          );
-          return;
-        }
+      // A fighter can never re-hit a ball they just struck unless it has been sent back at them.
+      const isOwnOutgoingBall = ball.lastHitterId === f.id && ball.targetId !== f.id;
+
+      if (!isOwnOutgoingBall && f.kineticDomeTimer > 0 && distToBall <= f.getParryReach() + 0.5) {
+        this.executeParry(
+          f,
+          ball,
+          fighters,
+          isEndlessGauntlet,
+          dronePosition,
+          vfx,
+          callbacks,
+          true
+        );
+        return;
       }
 
-      if (f.parryActiveTimer > 0 && !f.swingResolved) {
+      if (!isOwnOutgoingBall && f.parryActiveTimer > 0 && !f.swingResolved) {
         const reach = f.getParryReach();
         const sweptInReach = sweptSphereVsSphere(
           ball.prevPosition,

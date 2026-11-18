@@ -267,10 +267,16 @@ export class AISystem {
     // 6. Parry & Deceptive Bunt Timing
     const realDistToBall = bot.position.distanceTo(ball.position);
     const reach = bot.getParryReach();
+    const ballIsComingAtMe =
+      ball.targetId === bot.id &&
+      ball.lastHitterId !== bot.id &&
+      ball.velocity.x * (bot.position.x - ball.position.x) +
+        ball.velocity.z * (bot.position.z - ball.position.z) >
+        0;
 
     // Rookie/Contender occasional early panic swing on fast rallies
     if (
-      isTargeted &&
+      ballIsComingAtMe &&
       tier.earlySwingChance > 0 &&
       mach >= 2.2 &&
       distToBall > reach + 1.8 &&
@@ -284,18 +290,23 @@ export class AISystem {
       }
     }
 
-    // Optimal parry window check using perceived distance + reaction projection
+    // Optimal parry window check using perceived distance + reaction projection.
+    // Bots only swing when the ball is genuinely coming at them (targeted, not their own outgoing
+    // shot, and moving toward them) so they no longer flail at the ball repeatedly.
     const timeToImpact = distToBall / Math.max(10, perceived.speed);
     const triggerThreshold = reach + Math.min(2.2, perceived.speed * 0.042);
 
     if (
-      (isTargeted || realDistToBall <= reach * 0.95) &&
+      ballIsComingAtMe &&
+      brain.decisionCooldown <= 0 &&
       (distToBall <= triggerThreshold || realDistToBall <= reach || timeToImpact <= 0.095)
     ) {
       // Grandmaster / Veteran deceptive bunt lobs after Mach-3+ rallies
       const useDeceptiveBunt =
         mach >= 3.0 && Math.random() < tier.buntChanceHighSpeed;
-      bot.tryParry(useDeceptiveBunt, simClock);
+      if (bot.tryParry(useDeceptiveBunt, simClock)) {
+        brain.decisionCooldown = 0.42;
+      }
     }
   }
 }

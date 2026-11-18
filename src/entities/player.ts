@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BatId, BatVisualRig, createBatVisualRig } from './bats';
-import { CharacterDefinition, CharacterId, getCharacterDefinition } from './characters';
+import { CharacterDefinition, CharacterId, getCharacterDefinition, getCharacterVisuals } from './characters';
 import {
   CylinderObstacle,
   JumpPadVolume,
@@ -38,8 +38,14 @@ export class PlayerFighter {
   private readonly torsoMesh: THREE.Mesh;
   private readonly headGroup: THREE.Group;
   private readonly characterHatGroup: THREE.Group;
+  private readonly accessoryGroup: THREE.Group;
   private readonly clothMat: THREE.MeshStandardMaterial;
   private readonly trimMat: THREE.MeshStandardMaterial;
+  private readonly limbMat: THREE.MeshStandardMaterial;
+  private readonly skinMat: THREE.MeshStandardMaterial;
+  private readonly capeMat: THREE.MeshStandardMaterial;
+  /** When false (e.g. the menu preview model) the fighter emits no gameplay events/audio. */
+  public emitEvents = true;
   private readonly leftArmPivot: THREE.Group;
   private readonly rightArmPivot: THREE.Group;
   private readonly leftLegPivot: THREE.Group;
@@ -126,33 +132,47 @@ export class PlayerFighter {
     this.bodyGroup = new THREE.Group();
     this.rootGroup.add(this.bodyGroup);
 
-    const darkSlateMat = new THREE.MeshStandardMaterial({
-      color: 0x2d3748,
+    const style = getCharacterVisuals(characterId);
+
+    this.limbMat = new THREE.MeshStandardMaterial({
+      color: style.limbHex,
       roughness: 0.78,
       metalness: 0.12,
       flatShading: true,
     });
+    const darkSlateMat = this.limbMat;
 
-    const skinWarmMat = new THREE.MeshStandardMaterial({
-      color: 0xe2ccb4,
+    this.skinMat = new THREE.MeshStandardMaterial({
+      color: style.skinHex,
       roughness: 0.8,
       metalness: 0.05,
       flatShading: true,
     });
+    const skinWarmMat = this.skinMat;
 
     this.clothMat = new THREE.MeshStandardMaterial({
-      color: this.characterDef.accentHex,
+      color: style.outfitHex,
       roughness: 0.75,
       metalness: 0.1,
       flatShading: true,
     });
 
     this.trimMat = new THREE.MeshStandardMaterial({
-      color: 0xd6c7b2,
-      roughness: 0.65,
-      metalness: 0.25,
+      color: style.trimHex,
+      roughness: 0.55,
+      metalness: 0.35,
       flatShading: true,
     });
+
+    this.capeMat = new THREE.MeshStandardMaterial({
+      color: style.capeHex,
+      roughness: 0.85,
+      metalness: 0.0,
+      flatShading: true,
+    });
+
+    this.accessoryGroup = new THREE.Group();
+    this.bodyGroup.add(this.accessoryGroup);
 
     // Tunic / Torso
     this.torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.27, 0.88, 8), this.clothMat);
@@ -301,7 +321,7 @@ export class PlayerFighter {
       const w = 0.4 - i * 0.045;
       const segMesh = new THREE.Mesh(
         new THREE.BoxGeometry(w, 0.05, 0.24),
-        this.clothMat
+        this.capeMat
       );
       this.capeMeshes.push(segMesh);
       this.capeGroup.add(segMesh);
@@ -312,83 +332,124 @@ export class PlayerFighter {
   }
 
   /**
-   * Builds unique 3D headwear and body proportions for each of the 5 playable characters
-   * so every character is immediately recognizable on the court.
+   * Builds a unique outfit for each of the 5 playable characters (headwear, body build,
+   * armour pieces and back accessories) so every fighter has its own recognisable design.
+   * Only shared per-fighter materials are used, so swapping characters never leaks materials.
    */
   private rebuildCharacterSilhouette(): void {
-    while (this.characterHatGroup.children.length > 0) {
-      this.characterHatGroup.remove(this.characterHatGroup.children[0]);
-    }
+    const clearGroup = (g: THREE.Group): void => {
+      while (g.children.length > 0) {
+        const child = g.children[0] as THREE.Mesh;
+        g.remove(child);
+        if (child.geometry) child.geometry.dispose();
+      }
+    };
+    clearGroup(this.characterHatGroup);
+    clearGroup(this.accessoryGroup);
 
-    // Default body proportions
-    this.torsoMesh.scale.set(1, 1, 1);
+    const style = getCharacterVisuals(this.characterId);
+    this.clothMat.color.setHex(style.outfitHex);
+    this.limbMat.color.setHex(style.limbHex);
+    this.trimMat.color.setHex(style.trimHex);
+    this.skinMat.color.setHex(style.skinHex);
+    this.capeMat.color.setHex(style.capeHex);
+    this.torsoMesh.scale.set(style.torsoScale[0], style.torsoScale[1], style.torsoScale[2]);
 
-    if (this.characterId === 'volt') {
-      // KAZE (Wind Strider): Wide Conical Bamboo Straw Ronin Hat (Kasa)
-      const strawMat = new THREE.MeshStandardMaterial({
-        color: 0xd4be94,
-        roughness: 0.85,
-        flatShading: true,
-      });
-      const kasa = new THREE.Mesh(new THREE.ConeGeometry(0.62, 0.26, 12), strawMat);
-      kasa.position.set(0, 0.22, 0);
-      kasa.castShadow = true;
-      this.characterHatGroup.add(kasa);
-    } else if (this.characterId === 'chrono') {
-      // TOKI (Time Keeper): Tall Scholar Crown + Floating Brass Astrolabe Ring behind back
-      const brassMat = new THREE.MeshStandardMaterial({
-        color: 0xc8a45d,
-        roughness: 0.4,
-        metalness: 0.7,
-        flatShading: true,
-      });
-      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.28, 8), this.clothMat);
-      crown.position.set(0, 0.26, 0);
-      this.characterHatGroup.add(crown);
+    const hat = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.castShadow = true;
+      this.characterHatGroup.add(m);
+      return m;
+    };
+    const acc = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(x, y, z);
+      m.castShadow = true;
+      this.accessoryGroup.add(m);
+      return m;
+    };
 
-      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.04, 6, 16), brassMat);
-      halo.position.set(0, -0.35, -0.34);
-      this.characterHatGroup.add(halo);
-    } else if (this.characterId === 'titan') {
-      // GORO (Iron Champion): Broad 1.24x Heavy Armored Build + Horned Samurai Kabuto Crest
-      this.torsoMesh.scale.set(1.24, 1.05, 1.2);
-      const brassMat = new THREE.MeshStandardMaterial({
-        color: 0xd4af37,
-        roughness: 0.4,
-        metalness: 0.75,
-        flatShading: true,
-      });
-      const helm = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.26, 8), this.clothMat);
-      helm.position.set(0, 0.14, 0);
-      this.characterHatGroup.add(helm);
-
-      const crestL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.34, 0.08), brassMat);
-      crestL.position.set(-0.18, 0.3, 0.14);
-      crestL.rotation.z = 0.42;
-      this.characterHatGroup.add(crestL);
-
-      const crestR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.34, 0.08), brassMat);
-      crestR.position.set(0.18, 0.3, 0.14);
-      crestR.rotation.z = -0.42;
-      this.characterHatGroup.add(crestR);
-    } else if (this.characterId === 'phantom') {
-      // KAGE (Shadow Rogue): Shinobi Cowl Hood + Face Mask
-      const hood = new THREE.Mesh(new THREE.OctahedronGeometry(0.29, 1), this.clothMat);
-      hood.position.set(0, 0.06, -0.03);
-      this.characterHatGroup.add(hood);
-    } else if (this.characterId === 'aegis') {
-      // TATSU (Temple Warden): Crested Sentinel Helm + Wide Shoulder Plates
-      this.torsoMesh.scale.set(1.12, 1.0, 1.12);
-      const crest = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.46), this.trimMat);
-      crest.position.set(0, 0.24, 0);
-      this.characterHatGroup.add(crest);
+    switch (this.characterId) {
+      case 'chrono': {
+        // TOKI — scholar hat with square board, long robe skirt, brass astrolabe rings on the back
+        hat(new THREE.CylinderGeometry(0.17, 0.2, 0.34, 10), this.clothMat, 0, 0.3, 0);
+        hat(new THREE.BoxGeometry(0.44, 0.04, 0.44), this.trimMat, 0, 0.48, 0);
+        acc(new THREE.CylinderGeometry(0.3, 0.52, 0.76, 12), this.clothMat, 0, 0.5, 0);
+        acc(new THREE.CylinderGeometry(0.53, 0.53, 0.06, 12), this.trimMat, 0, 0.14, 0);
+        const ringA = acc(new THREE.TorusGeometry(0.42, 0.03, 6, 24), this.trimMat, 0, 1.72, -0.4);
+        ringA.rotation.y = 0.5;
+        const ringB = acc(new THREE.TorusGeometry(0.33, 0.03, 6, 24), this.trimMat, 0, 1.72, -0.4);
+        ringB.rotation.y = -0.6;
+        acc(new THREE.OctahedronGeometry(0.08, 0), this.trimMat, 0, 1.72, -0.4);
+        break;
+      }
+      case 'volt': {
+        // KAZE — wide straw kasa hat, neck scarf wrap, gourd on the hip, slim build
+        hat(new THREE.ConeGeometry(0.68, 0.28, 14), this.trimMat, 0, 0.25, 0);
+        hat(new THREE.SphereGeometry(0.06, 6, 6), this.trimMat, 0, 0.4, 0);
+        const wrap = acc(new THREE.TorusGeometry(0.2, 0.075, 6, 14), this.capeMat, 0, 1.6, 0);
+        wrap.rotation.x = Math.PI / 2;
+        acc(new THREE.SphereGeometry(0.11, 8, 8), this.trimMat, 0.32, 0.8, -0.12);
+        acc(new THREE.SphereGeometry(0.08, 8, 8), this.trimMat, 0.32, 0.96, -0.12);
+        break;
+      }
+      case 'titan': {
+        // GORO — horned kabuto with neck guard, iron face mask, huge pauldrons and armoured tassets
+        hat(new THREE.CylinderGeometry(0.29, 0.34, 0.24, 10), this.limbMat, 0, 0.13, 0);
+        hat(new THREE.CylinderGeometry(0.32, 0.48, 0.2, 12, 1, true), this.clothMat, 0, -0.04, -0.04);
+        const crestL = hat(new THREE.BoxGeometry(0.06, 0.38, 0.06), this.trimMat, -0.17, 0.36, 0.16);
+        crestL.rotation.z = 0.45;
+        const crestR = hat(new THREE.BoxGeometry(0.06, 0.38, 0.06), this.trimMat, 0.17, 0.36, 0.16);
+        crestR.rotation.z = -0.45;
+        hat(new THREE.CylinderGeometry(0.07, 0.07, 0.04, 10), this.trimMat, 0, 0.2, 0.3).rotation.x = Math.PI / 2;
+        hat(new THREE.BoxGeometry(0.3, 0.12, 0.06), this.limbMat, 0, -0.1, 0.2);
+        const padL = acc(new THREE.BoxGeometry(0.42, 0.13, 0.44), this.clothMat, -0.6, 1.5, 0);
+        padL.rotation.z = 0.35;
+        const padR = acc(new THREE.BoxGeometry(0.42, 0.13, 0.44), this.clothMat, 0.6, 1.5, 0);
+        padR.rotation.z = -0.35;
+        acc(new THREE.BoxGeometry(0.44, 0.04, 0.46), this.trimMat, -0.6, 1.43, 0).rotation.z = 0.35;
+        acc(new THREE.BoxGeometry(0.44, 0.04, 0.46), this.trimMat, 0.6, 1.43, 0).rotation.z = -0.35;
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2;
+          const t = acc(new THREE.BoxGeometry(0.3, 0.32, 0.06), this.clothMat, Math.sin(a) * 0.38, 0.66, Math.cos(a) * 0.38);
+          t.rotation.y = a;
+        }
+        break;
+      }
+      case 'phantom': {
+        // KAGE — pointed shinobi hood, lower face mask, twin kunai crossed on the back, slim build
+        const hood = hat(new THREE.SphereGeometry(0.28, 10, 8), this.clothMat, 0, 0.04, -0.04);
+        hood.scale.set(1, 1.05, 1.1);
+        const tip = hat(new THREE.ConeGeometry(0.16, 0.4, 8), this.clothMat, 0, 0.12, -0.3);
+        tip.rotation.x = -1.1;
+        hat(new THREE.BoxGeometry(0.34, 0.14, 0.12), this.limbMat, 0, -0.08, 0.17);
+        const kunaiA = acc(new THREE.BoxGeometry(0.05, 0.66, 0.04), this.trimMat, 0, 1.2, -0.32);
+        kunaiA.rotation.z = 0.6;
+        const kunaiB = acc(new THREE.BoxGeometry(0.05, 0.66, 0.04), this.trimMat, 0, 1.2, -0.32);
+        kunaiB.rotation.z = -0.6;
+        break;
+      }
+      case 'aegis': {
+        // TATSU — domed crest helm, broad shoulder plates and a round jade-emblem shield on the back
+        const dome = hat(new THREE.SphereGeometry(0.27, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), this.limbMat, 0, 0.02, 0);
+        dome.scale.set(1, 1.05, 1);
+        hat(new THREE.BoxGeometry(0.07, 0.32, 0.52), this.trimMat, 0, 0.27, 0);
+        acc(new THREE.BoxGeometry(0.36, 0.09, 0.36), this.trimMat, -0.5, 1.58, 0);
+        acc(new THREE.BoxGeometry(0.36, 0.09, 0.36), this.trimMat, 0.5, 1.58, 0);
+        const shield = acc(new THREE.CylinderGeometry(0.44, 0.44, 0.07, 18), this.clothMat, 0, 1.15, -0.4);
+        shield.rotation.x = Math.PI / 2;
+        acc(new THREE.TorusGeometry(0.44, 0.04, 6, 24), this.limbMat, 0, 1.15, -0.44);
+        const emblem = acc(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 6), this.trimMat, 0, 1.15, -0.46);
+        emblem.rotation.x = Math.PI / 2;
+        break;
+      }
     }
   }
 
   public setLoadout(characterId: CharacterId, batId: BatId): void {
     this.characterId = characterId;
     this.characterDef = getCharacterDefinition(characterId);
-    this.clothMat.color.setHex(this.characterDef.accentHex);
     this.rebuildCharacterSilhouette();
 
     if (this.batId !== batId) {
@@ -460,22 +521,26 @@ export class PlayerFighter {
       this.isGrounded = false;
       this.coyoteTimer = 0;
       this.squashStretch = 1.24;
-      gameEvents.emit('jump', {
-        playerId: this.id,
-        position: this.position,
-        isDoubleJump: false,
-      });
+      if (this.emitEvents) {
+        gameEvents.emit('jump', {
+          playerId: this.id,
+          position: this.position,
+          isDoubleJump: false,
+        });
+      }
       return true;
     } else if (this.doubleJumpAvailable) {
       this.velocity.y = DOUBLE_JUMP_SPEED;
       this.doubleJumpAvailable = false;
       this.flipAnimTimer = 0.36;
       this.squashStretch = 1.2;
-      gameEvents.emit('jump', {
-        playerId: this.id,
-        position: this.position,
-        isDoubleJump: true,
-      });
+      if (this.emitEvents) {
+        gameEvents.emit('jump', {
+          playerId: this.id,
+          position: this.position,
+          isDoubleJump: true,
+        });
+      }
       return true;
     }
     return false;
@@ -500,12 +565,14 @@ export class PlayerFighter {
       this.velocity.y = 1.5;
     }
 
-    gameEvents.emit('dash', {
-      playerId: this.id,
-      position: this.position,
-      direction: this.dashDirection,
-      colorHex: this.characterDef.accentHex,
-    });
+    if (this.emitEvents) {
+      gameEvents.emit('dash', {
+        playerId: this.id,
+        position: this.position,
+        direction: this.dashDirection,
+        colorHex: this.characterDef.accentHex,
+      });
+    }
     return true;
   }
 
@@ -524,7 +591,12 @@ export class PlayerFighter {
   public onParrySucceeded(): void {
     this.swingResolved = true;
     this.parryActiveTimer = 0;
-    this.parryWhiffTimer = 0.07;
+    this.parryWhiffTimer = 0.34;
+  }
+
+  /** Plays a visual slash animation on the 3D preview turntable without triggering parry hitboxes. */
+  public triggerPreviewPose(): void {
+    this.swingAnimTimer = 0.36;
   }
 
   public update(
@@ -562,10 +634,12 @@ export class PlayerFighter {
         this.parryActiveTimer = 0;
         if (!this.swingResolved) {
           this.parryWhiffTimer = BASE_WHIFF_RECOVERY * this.characterDef.whiffRecoveryMultiplier;
-          gameEvents.emit('whiff', {
-            playerId: this.id,
-            position: this.position,
-          });
+          if (this.emitEvents) {
+            gameEvents.emit('whiff', {
+              playerId: this.id,
+              position: this.position,
+            });
+          }
         }
       }
     } else if (this.parryWhiffTimer > 0) {

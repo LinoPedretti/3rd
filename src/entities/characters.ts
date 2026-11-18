@@ -126,3 +126,76 @@ export const CHARACTER_DEFINITIONS: CharacterDefinition[] = [
 export function getCharacterDefinition(id: CharacterId): CharacterDefinition {
   return CHARACTER_DEFINITIONS.find((c) => c.id === id) || CHARACTER_DEFINITIONS[0];
 }
+
+/**
+ * Per-character visual design: every fighter has its own palette, body build and outfit
+ * so they are instantly recognisable on the court and in the character preview.
+ */
+export interface CharacterVisualStyle {
+  outfitHex: number;
+  limbHex: number;
+  trimHex: number;
+  skinHex: number;
+  capeHex: number;
+  /** Torso scale [x, y, z] — slim vs. broad builds. */
+  torsoScale: [number, number, number];
+  playstyle: string;
+  lore: string;
+}
+
+export const CHARACTER_VISUALS: Record<CharacterId, CharacterVisualStyle> = {
+  chrono: {
+    outfitHex: 0x2b547e,
+    limbHex: 0x1e2f45,
+    trimHex: 0xc8a45d,
+    skinHex: 0xe8cfb4,
+    capeHex: 0x223f61,
+    torsoScale: [1.0, 1.0, 1.0],
+    playstyle: 'CONTROL',
+    lore: 'A scholar-monk in a long navy robe and tall hat, carrying a brass astrolabe that bends time.',
+  },
+  volt: {
+    outfitHex: 0x2b7a78,
+    limbHex: 0x3d4b48,
+    trimHex: 0xd4be94,
+    skinHex: 0xd9b894,
+    capeHex: 0xe8dcc0,
+    torsoScale: [0.88, 1.0, 0.88],
+    playstyle: 'SPEED',
+    lore: 'A wandering ronin under a wide straw hat, trailing a long cream scarf in the wind.',
+  },
+  titan: {
+    outfitHex: 0xa8432f,
+    limbHex: 0x3a3a3f,
+    trimHex: 0xc9a227,
+    skinHex: 0xc99c78,
+    capeHex: 0x6e2a20,
+    torsoScale: [1.26, 1.05, 1.2],
+    playstyle: 'POWER',
+    lore: 'A towering samurai in lacquered red armour, horned kabuto and heavy shoulder plates.',
+  },
+  phantom: {
+    outfitHex: 0x4a3560,
+    limbHex: 0x1f1d24,
+    trimHex: 0x8a8394,
+    skinHex: 0xe3c7aa,
+    capeHex: 0x2d2338,
+    torsoScale: [0.85, 0.98, 0.85],
+    playstyle: 'TRICKSTER',
+    lore: 'A masked shinobi in a deep violet hood with twin kunai strapped across the back.',
+  },
+  aegis: {
+    outfitHex: 0x2f6f4e,
+    limbHex: 0x5b4a36,
+    trimHex: 0xd6c7b2,
+    skinHex: 0xb98a66,
+    capeHex: 0x234f39,
+    torsoScale: [1.14, 1.0, 1.14],
+    playstyle: 'DEFENSE',
+    lore: 'A temple guardian with a crested helm, bronze bracers and a round jade-emblem shield.',
+  },
+};
+
+export function getCharacterVisuals(id: CharacterId): CharacterVisualStyle {
+  return CHARACTER_VISUALS[id] || CHARACTER_VISUALS.chrono;
+}

@@ -61,6 +61,21 @@ export class ArenaRenderer {
     window.addEventListener('resize', this.onResize);
   }
 
+  public setEnvironmentPalette(
+    skyHex: number,
+    fogNear: number,
+    fogFar: number,
+    sunIntensity = 1.65,
+    hemiSkyHex = 0xf5f8fa,
+    hemiGroundHex = 0xc7bfb2
+  ): void {
+    this.scene.background = new THREE.Color(skyHex);
+    this.scene.fog = new THREE.Fog(skyHex, fogNear, fogFar);
+    this.keyLight.intensity = sunIntensity;
+    this.hemiLight.color.setHex(hemiSkyHex);
+    this.hemiLight.groundColor.setHex(hemiGroundHex);
+  }
+
   public updateReactiveLighting(
     ballSpeed: number,
     _ballPos: THREE.Vector3,
