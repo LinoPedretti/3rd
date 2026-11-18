@@ -1,7 +1,7 @@
 import { BAT_DEFINITIONS, BatId } from '../entities/bats';
 import { CHARACTER_DEFINITIONS, CharacterId } from '../entities/characters';
 
-const STORAGE_KEY = 'hyperblade.save.v1';
+const STORAGE_KEY = 'hyperblade.save.v2';
 
 export interface SaveProfileData {
   coins: number;
@@ -16,27 +16,29 @@ export interface SaveProfileData {
   gauntletBestParries: number;
 }
 
+const ALL_CHARS: CharacterId[] = CHARACTER_DEFINITIONS.map((c) => c.id);
+const ALL_BATS: BatId[] = BAT_DEFINITIONS.map((b) => b.id);
+
 const DEFAULT_SAVE: SaveProfileData = {
-  coins: 250,
-  unlockedCharacters: ['chrono'],
-  unlockedBats: ['neon_katana'],
+  coins: 500,
+  unlockedCharacters: [...ALL_CHARS],
+  unlockedBats: [...ALL_BATS],
   equippedCharacter: 'chrono',
   equippedBat: 'neon_katana',
   totalMatches: 0,
   totalWins: 0,
   totalParries: 0,
-  peakMach: 1.4,
+  peakMach: 1.46,
   gauntletBestParries: 0,
 };
 
 export class ProgressionSystem {
   public data: SaveProfileData;
 
-  constructor(unlockAllFlag = false) {
+  constructor(_unlockAllFlag = false) {
     this.data = this.load();
-    if (unlockAllFlag) {
-      this.unlockAll();
-    }
+    // Ensure all 5 characters & 4 weapons are always selectable before entering a game
+    this.unlockAll();
   }
 
   private load(): SaveProfileData {
@@ -46,18 +48,14 @@ export class ProgressionSystem {
       const parsed = JSON.parse(raw) as Partial<SaveProfileData>;
       return {
         coins: typeof parsed.coins === 'number' ? parsed.coins : DEFAULT_SAVE.coins,
-        unlockedCharacters: Array.isArray(parsed.unlockedCharacters)
-          ? parsed.unlockedCharacters
-          : ['chrono'],
-        unlockedBats: Array.isArray(parsed.unlockedBats)
-          ? parsed.unlockedBats
-          : ['neon_katana'],
+        unlockedCharacters: [...ALL_CHARS],
+        unlockedBats: [...ALL_BATS],
         equippedCharacter: parsed.equippedCharacter || 'chrono',
         equippedBat: parsed.equippedBat || 'neon_katana',
         totalMatches: parsed.totalMatches || 0,
         totalWins: parsed.totalWins || 0,
         totalParries: parsed.totalParries || 0,
-        peakMach: parsed.peakMach || 1.4,
+        peakMach: parsed.peakMach || 1.46,
         gauntletBestParries: parsed.gauntletBestParries || 0,
       };
     } catch {
@@ -74,60 +72,29 @@ export class ProgressionSystem {
   }
 
   public unlockAll(): void {
-    this.data.unlockedCharacters = CHARACTER_DEFINITIONS.map((c) => c.id);
-    this.data.unlockedBats = BAT_DEFINITIONS.map((b) => b.id);
-    this.data.coins = Math.max(this.data.coins, 2500);
+    this.data.unlockedCharacters = [...ALL_CHARS];
+    this.data.unlockedBats = [...ALL_BATS];
     this.save();
   }
 
-  public isCharacterUnlocked(id: CharacterId): boolean {
-    return this.data.unlockedCharacters.includes(id);
+  public isCharacterUnlocked(_id: CharacterId): boolean {
+    return true;
   }
 
-  public isBatUnlocked(id: BatId): boolean {
-    return this.data.unlockedBats.includes(id);
+  public isBatUnlocked(_id: BatId): boolean {
+    return true;
   }
 
   public unlockOrEquipCharacter(id: CharacterId): { success: boolean; message: string } {
-    if (this.isCharacterUnlocked(id)) {
-      this.data.equippedCharacter = id;
-      this.save();
-      return { success: true, message: 'EQUIPPED' };
-    }
-
-    const def = CHARACTER_DEFINITIONS.find((c) => c.id === id);
-    if (!def) return { success: false, message: 'INVALID' };
-
-    if (this.data.coins < def.cost) {
-      return { success: false, message: `NEED ${def.cost - this.data.coins} MORE COINS` };
-    }
-
-    this.data.coins -= def.cost;
-    this.data.unlockedCharacters.push(id);
     this.data.equippedCharacter = id;
     this.save();
-    return { success: true, message: 'UNLOCKED & EQUIPPED' };
+    return { success: true, message: 'CHARACTER SELECTED' };
   }
 
   public unlockOrEquipBat(id: BatId): { success: boolean; message: string } {
-    if (this.isBatUnlocked(id)) {
-      this.data.equippedBat = id;
-      this.save();
-      return { success: true, message: 'EQUIPPED' };
-    }
-
-    const def = BAT_DEFINITIONS.find((b) => b.id === id);
-    if (!def) return { success: false, message: 'INVALID' };
-
-    if (this.data.coins < def.cost) {
-      return { success: false, message: `NEED ${def.cost - this.data.coins} MORE COINS` };
-    }
-
-    this.data.coins -= def.cost;
-    this.data.unlockedBats.push(id);
     this.data.equippedBat = id;
     this.save();
-    return { success: true, message: 'UNLOCKED & EQUIPPED' };
+    return { success: true, message: 'WEAPON SELECTED' };
   }
 
   public recordMatchReward(params: {

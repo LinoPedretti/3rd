@@ -103,11 +103,16 @@ function bootstrap(): void {
     (fixedDt) => {
       match.updateFixed(fixedDt);
     },
-    (_alpha, frameDt) => {
+    (alpha, frameDt) => {
       const ball = match.ball;
       const player = match.fighters[0];
 
-      // Determine target position for ball directional lock beam
+      // Sub-frame interpolation for all living fighters
+      for (let i = 0; i < match.fighters.length; i++) {
+        match.fighters[i].updateRenderInterpolation(alpha);
+      }
+
+      // Determine target position for ball directional trajectory line
       let lockedTargetPos = null;
       if (ball.targetId === 'gauntlet_drone' && match.mode === 'endless_gauntlet') {
         lockedTargetPos = match.dronePosition;
@@ -115,21 +120,27 @@ function bootstrap(): void {
         for (let i = 0; i < match.fighters.length; i++) {
           const f = match.fighters[i];
           if (f.alive && f.id === ball.targetId) {
-            lockedTargetPos = f.position;
+            lockedTargetPos = f.renderPosition;
             break;
           }
         }
       }
 
-      // Update ball visuals & floor projection ring
+      // Update ball visuals & floor projection ring with sub-frame alpha interpolation
       let floorY = 0;
       for (let i = 0; i < arena.platforms.length; i++) {
         const p = arena.platforms[i];
-        if (Math.hypot(ball.position.x - p.position.x, ball.position.z - p.position.z) <= p.radius) {
+        if (
+          Math.hypot(
+            ball.renderPosition.x - p.position.x,
+            ball.renderPosition.z - p.position.z
+          ) <= p.radius
+        ) {
           floorY = Math.max(floorY, p.topY);
         }
       }
       ball.updateVisuals(
+        alpha,
         frameDt,
         lockedTargetPos,
         ball.targetId === player.id && match.state !== 'SHOWCASE',
@@ -139,13 +150,13 @@ function bootstrap(): void {
       // Update camera (Orbiting Showcase vs Over-the-Shoulder Third-Person Action Camera)
       const mouseDelta = input.consumeMouseDelta();
       if (match.state === 'SHOWCASE' || match.state === 'MATCH_OVER') {
-        tpsCamera.updateShowcase(frameDt, ball.position);
+        tpsCamera.updateShowcase(frameDt, ball.renderPosition);
       } else {
         tpsCamera.updateGameplay(
           frameDt,
           mouseDelta,
-          player.position,
-          ball.position,
+          player.renderPosition,
+          ball.renderPosition,
           ball.targetId === player.id,
           input.ballAssistEnabled,
           arena.arenaRadius

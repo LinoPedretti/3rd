@@ -81,13 +81,12 @@ export class VFXSystem {
     private readonly scene: THREE.Scene,
     camera: THREE.PerspectiveCamera
   ) {
-    // 1. Pooled 3D Spark / Fire / Plasma Particles (InstancedMesh)
-    const partGeo = new THREE.OctahedronGeometry(0.14, 0);
+    // 1. Pooled 3D Spark / Dust Particles (InstancedMesh)
+    const partGeo = new THREE.OctahedronGeometry(0.11, 0);
     const partMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.92,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.75,
       depthWrite: false,
     });
     this.particleMesh = new THREE.InstancedMesh(partGeo, partMat, MAX_PARTICLES);
@@ -100,27 +99,26 @@ export class VFXSystem {
         position: new THREE.Vector3(),
         velocity: new THREE.Vector3(),
         age: 0,
-        life: 0.4,
+        life: 0.35,
         scale: 1,
-        color: new THREE.Color(0x00e5ff),
+        color: new THREE.Color(0x8f887d),
       });
       this._dummy.position.set(0, -100, 0);
       this._dummy.scale.setScalar(0);
       this._dummy.updateMatrix();
       this.particleMesh.setMatrixAt(i, this._dummy.matrix);
-      this.particleMesh.setColorAt(i, this._color.setHex(0x00e5ff));
+      this.particleMesh.setColorAt(i, this._color.setHex(0x8f887d));
     }
     this.scene.add(this.particleMesh);
 
-    // 2. Pooled 3D Expanding Shockwave Rings & Barrier Wall Ripples (InstancedMesh)
-    const ringGeo = new THREE.RingGeometry(0.76, 1.0, 28);
+    // 2. Pooled 3D Expanding Shockwave Rings (InstancedMesh)
+    const ringGeo = new THREE.RingGeometry(0.84, 1.0, 28);
     ringGeo.rotateX(-Math.PI / 2);
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.85,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.55,
       depthWrite: false,
     });
     this.shockwaveMesh = new THREE.InstancedMesh(ringGeo, ringMat, MAX_SHOCKWAVES);
@@ -133,28 +131,27 @@ export class VFXSystem {
         position: new THREE.Vector3(),
         normal: new THREE.Vector3(0, 1, 0),
         age: 0,
-        life: 0.45,
-        maxRadius: 3.5,
-        color: new THREE.Color(0x00e5ff),
+        life: 0.38,
+        maxRadius: 3.0,
+        color: new THREE.Color(0x8f887d),
         isWallRipple: false,
       });
       this._dummy.position.set(0, -100, 0);
       this._dummy.scale.setScalar(0);
       this._dummy.updateMatrix();
       this.shockwaveMesh.setMatrixAt(i, this._dummy.matrix);
-      this.shockwaveMesh.setColorAt(i, this._color.setHex(0x00e5ff));
+      this.shockwaveMesh.setColorAt(i, this._color.setHex(0x8f887d));
     }
     this.scene.add(this.shockwaveMesh);
 
-    // 3. Pooled 3D Hologram Dash Afterimages (InstancedMesh)
+    // 3. Pooled 3D Dash Afterimages (InstancedMesh)
     const afterGeo = new THREE.CylinderGeometry(0.32, 0.22, 1.55, 6);
     afterGeo.translate(0, 0.85, 0);
     const afterMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       wireframe: false,
       transparent: true,
-      opacity: 0.38,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.28,
       depthWrite: false,
     });
     this.afterimageMesh = new THREE.InstancedMesh(afterGeo, afterMat, MAX_AFTERIMAGES);

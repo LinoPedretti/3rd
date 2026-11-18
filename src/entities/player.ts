@@ -10,19 +10,19 @@ import {
 import { gameEvents } from '../engine/events';
 
 const GRAVITY = 28.0;
-const BASE_MOVE_SPEED = 9.6;
-const GROUND_ACCEL = 72.0;
-const GROUND_FRICTION = 52.0;
-const AIR_ACCEL = 32.0;
+const BASE_MOVE_SPEED = 10.5;
+const GROUND_ACCEL = 76.0;
+const GROUND_FRICTION = 55.0;
+const AIR_ACCEL = 36.0;
 const JUMP_SPEED = 10.6;
 const DOUBLE_JUMP_SPEED = 9.8;
 const COYOTE_TIME_MAX = 0.1; // 100ms Coyote Time
-const DASH_SPEED = 26.5;
+const DASH_SPEED = 27.5;
 const DASH_DURATION = 0.18;
 const BASE_DASH_IFRAMES = 0.14; // 140ms invulnerability frames
 const BASE_DASH_COOLDOWN = 1.8; // 1.8s cooldown
-const PARRY_ACTIVE_WINDOW = 0.19; // 190ms active parry window
-const BASE_WHIFF_RECOVERY = 0.45; // 450ms recovery cooldown if you swing early
+const PARRY_ACTIVE_WINDOW = 0.21; // 210ms clean parry window
+const BASE_WHIFF_RECOVERY = 0.42; // 420ms recovery cooldown if you swing early
 
 export class PlayerFighter {
   public readonly id: string;
@@ -37,8 +37,9 @@ export class PlayerFighter {
   public readonly bodyGroup: THREE.Group;
   private readonly torsoMesh: THREE.Mesh;
   private readonly headGroup: THREE.Group;
-  private readonly visorMat: THREE.MeshStandardMaterial;
-  private readonly accentMat: THREE.MeshStandardMaterial;
+  private readonly characterHatGroup: THREE.Group;
+  private readonly clothMat: THREE.MeshStandardMaterial;
+  private readonly trimMat: THREE.MeshStandardMaterial;
   private readonly leftArmPivot: THREE.Group;
   private readonly rightArmPivot: THREE.Group;
   private readonly leftLegPivot: THREE.Group;
@@ -56,13 +57,15 @@ export class PlayerFighter {
 
   private batRig: BatVisualRig;
 
-  // Spatial state
+  // Spatial state (with prevPosition & renderPosition for butter-smooth sub-frame interpolation)
   public readonly position = new THREE.Vector3();
+  public readonly prevPosition = new THREE.Vector3();
+  public readonly renderPosition = new THREE.Vector3();
   public readonly velocity = new THREE.Vector3();
   public readonly aimDirection = new THREE.Vector3(0, 0, -1);
   public readonly moveInputDir = new THREE.Vector3(0, 0, 0);
   public facingYaw = 0;
-  public readonly radius = 0.65;
+  public readonly radius = 0.68;
 
   // Platforming & movement state
   public isGrounded = true;
@@ -91,9 +94,9 @@ export class PlayerFighter {
   // Ability state
   public abilityCooldown = 0;
   public speedBoostTimer = 0;
-  public supernovaTimer = 0; // Titan 2.5s molten gold empower
-  public kineticDomeTimer = 0; // Aegis 1.2s auto-deflect dome
-  public stealthNextParry = false; // Phantom stealth curve flag
+  public supernovaTimer = 0;
+  public kineticDomeTimer = 0;
+  public stealthNextParry = false;
 
   // Match stats
   public alive = true;
@@ -101,7 +104,6 @@ export class PlayerFighter {
   public eliminationsThisMatch = 0;
   public clashesThisMatch = 0;
 
-  // Scratch vectors
   private readonly _wishDir = new THREE.Vector3();
   private readonly _capeAnchor = new THREE.Vector3();
 
@@ -124,74 +126,81 @@ export class PlayerFighter {
     this.bodyGroup = new THREE.Group();
     this.rootGroup.add(this.bodyGroup);
 
-    const armorMat = new THREE.MeshStandardMaterial({
-      color: 0x161d2e,
-      roughness: 0.35,
-      metalness: 0.75,
+    const darkSlateMat = new THREE.MeshStandardMaterial({
+      color: 0x2d3748,
+      roughness: 0.78,
+      metalness: 0.12,
       flatShading: true,
     });
 
-    this.accentMat = new THREE.MeshStandardMaterial({
+    const skinWarmMat = new THREE.MeshStandardMaterial({
+      color: 0xe2ccb4,
+      roughness: 0.8,
+      metalness: 0.05,
+      flatShading: true,
+    });
+
+    this.clothMat = new THREE.MeshStandardMaterial({
       color: this.characterDef.accentHex,
-      emissive: this.characterDef.emissiveHex,
-      emissiveIntensity: 1.5,
-      roughness: 0.25,
-      metalness: 0.6,
+      roughness: 0.75,
+      metalness: 0.1,
       flatShading: true,
     });
 
-    this.visorMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      emissive: this.characterDef.accentHex,
-      emissiveIntensity: 2.4,
-      roughness: 0.1,
-      metalness: 0.9,
+    this.trimMat = new THREE.MeshStandardMaterial({
+      color: 0xd6c7b2,
+      roughness: 0.65,
+      metalness: 0.25,
       flatShading: true,
     });
 
-    // Torso
-    this.torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.24, 0.86, 6), armorMat);
+    // Tunic / Torso
+    this.torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.27, 0.88, 8), this.clothMat);
     this.torsoMesh.position.y = 1.15;
     this.torsoMesh.castShadow = true;
     this.bodyGroup.add(this.torsoMesh);
 
-    // Chest reactor core trim
-    const chestCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), this.accentMat);
-    chestCore.position.set(0, 1.22, 0.28);
-    this.bodyGroup.add(chestCore);
+    // Belt / Sash
+    const sash = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.32, 0.16, 8), this.trimMat);
+    sash.position.y = 0.85;
+    this.bodyGroup.add(sash);
 
     // Shoulders
-    const leftShoulder = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18, 0), this.accentMat);
-    leftShoulder.position.set(-0.44, 1.48, 0);
+    const leftShoulder = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.22, 0.28), this.clothMat);
+    leftShoulder.position.set(-0.44, 1.46, 0);
     this.bodyGroup.add(leftShoulder);
 
-    const rightShoulder = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18, 0), this.accentMat);
-    rightShoulder.position.set(0.44, 1.48, 0);
+    const rightShoulder = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.22, 0.28), this.clothMat);
+    rightShoulder.position.set(0.44, 1.46, 0);
     this.bodyGroup.add(rightShoulder);
 
-    // Head + Glowing Visor
+    // Head + Distinct Character Headgear Group
     this.headGroup = new THREE.Group();
     this.headGroup.position.set(0, 1.78, 0);
-    const helm = new THREE.Mesh(new THREE.OctahedronGeometry(0.26, 1), armorMat);
-    helm.castShadow = true;
-    this.headGroup.add(helm);
+    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.23, 12, 10), skinWarmMat);
+    headMesh.castShadow = true;
+    this.headGroup.add(headMesh);
 
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.11, 0.22), this.visorMat);
-    visor.position.set(0, 0.02, 0.16);
-    this.headGroup.add(visor);
+    // Simple focused eyes band
+    const eyes = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.07, 0.18), darkSlateMat);
+    eyes.position.set(0, 0.02, 0.14);
+    this.headGroup.add(eyes);
+
+    this.characterHatGroup = new THREE.Group();
+    this.headGroup.add(this.characterHatGroup);
     this.bodyGroup.add(this.headGroup);
 
     // Arms & Weapon Socket
     this.leftArmPivot = new THREE.Group();
     this.leftArmPivot.position.set(-0.44, 1.42, 0);
-    const leftArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.62, 0.15), armorMat);
+    const leftArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.62, 0.16), darkSlateMat);
     leftArmMesh.position.y = -0.28;
     this.leftArmPivot.add(leftArmMesh);
     this.bodyGroup.add(this.leftArmPivot);
 
     this.rightArmPivot = new THREE.Group();
     this.rightArmPivot.position.set(0.44, 1.42, 0);
-    const rightArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.62, 0.16), armorMat);
+    const rightArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.62, 0.16), darkSlateMat);
     rightArmMesh.position.y = -0.28;
     this.rightArmPivot.add(rightArmMesh);
 
@@ -204,7 +213,7 @@ export class PlayerFighter {
     // Legs
     this.leftLegPivot = new THREE.Group();
     this.leftLegPivot.position.set(-0.18, 0.72, 0);
-    const leftLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.7, 0.18), armorMat);
+    const leftLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.19), darkSlateMat);
     leftLegMesh.position.y = -0.35;
     leftLegMesh.castShadow = true;
     this.leftLegPivot.add(leftLegMesh);
@@ -212,101 +221,87 @@ export class PlayerFighter {
 
     this.rightLegPivot = new THREE.Group();
     this.rightLegPivot.position.set(0.18, 0.72, 0);
-    const rightLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.7, 0.18), armorMat);
+    const rightLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.19), darkSlateMat);
     rightLegMesh.position.y = -0.35;
     rightLegMesh.castShadow = true;
     this.rightLegPivot.add(rightLegMesh);
     this.bodyGroup.add(this.rightLegPivot);
 
-    // Equipped 3D Bat & Ribbon Slash Mesh
+    // Equipped 3D Weapon & Slash Arc
     this.batRig = createBatVisualRig(this.batId);
     this.weaponSocket.add(this.batRig.group);
     this.rootGroup.add(this.batRig.slashRibbon);
 
+    // Build character-specific 3D silhouette features
+    this.rebuildCharacterSilhouette();
+
     // Grounded Contact Shadow Blob
-    const shadowGeo = new THREE.CircleGeometry(0.68, 16);
+    const shadowGeo = new THREE.CircleGeometry(0.72, 16);
     shadowGeo.rotateX(-Math.PI / 2);
     const shadowMat = new THREE.MeshBasicMaterial({
-      color: 0x000000,
+      color: 0x3b352d,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.38,
       depthWrite: false,
     });
     this.shadowBlob = new THREE.Mesh(shadowGeo, shadowMat);
     this.shadowBlob.position.y = 0.03;
     this.rootGroup.add(this.shadowBlob);
 
-    // Pulsing Crimson 3D Target Lock-On Ring around waist/feet
+    // High-Readability Crimson Target Ring around feet when ball is targeting this fighter
     this.targetLockRing = new THREE.Group();
     const lockOuter = new THREE.Mesh(
-      new THREE.RingGeometry(0.95, 1.15, 24),
+      new THREE.RingGeometry(1.0, 1.24, 32),
       new THREE.MeshBasicMaterial({
-        color: 0xff1744,
+        color: 0xc53030,
         side: THREE.DoubleSide,
         transparent: true,
-        opacity: 0.92,
-        blending: THREE.AdditiveBlending,
+        opacity: 0.9,
         depthWrite: false,
       })
     );
     lockOuter.rotation.x = -Math.PI / 2;
-    lockOuter.position.y = 0.08;
+    lockOuter.position.y = 0.05;
     this.targetLockRing.add(lockOuter);
-
-    const lockWaist = new THREE.Mesh(
-      new THREE.TorusGeometry(0.78, 0.035, 8, 24),
-      new THREE.MeshBasicMaterial({
-        color: 0xff1744,
-        transparent: true,
-        opacity: 0.85,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      })
-    );
-    lockWaist.rotation.x = Math.PI / 2;
-    lockWaist.position.y = 1.05;
-    this.targetLockRing.add(lockWaist);
     this.targetLockRing.visible = false;
     this.rootGroup.add(this.targetLockRing);
 
-    // Aegis Kinetic Dome (spinning hexagonal 3D energy shield sphere)
+    // Tatsu Ward Barrier Dome
     this.kineticDomeMesh = new THREE.Mesh(
       new THREE.IcosahedronGeometry(1.85, 1),
       new THREE.MeshBasicMaterial({
-        color: 0x00e676,
+        color: 0x2f6f4e,
         wireframe: true,
         transparent: true,
-        opacity: 0.72,
-        blending: THREE.AdditiveBlending,
+        opacity: 0.55,
       })
     );
     this.kineticDomeMesh.position.y = 1.15;
     this.kineticDomeMesh.visible = false;
     this.rootGroup.add(this.kineticDomeMesh);
 
-    // Titan Supernova Molten Gold Aura
+    // Goro Earth Shatter Ring
     this.supernovaAuraMesh = new THREE.Mesh(
-      new THREE.OctahedronGeometry(1.25, 1),
+      new THREE.TorusGeometry(1.15, 0.06, 8, 24),
       new THREE.MeshBasicMaterial({
-        color: 0xffab00,
-        wireframe: true,
+        color: 0xb84a39,
         transparent: true,
-        opacity: 0.65,
-        blending: THREE.AdditiveBlending,
+        opacity: 0.75,
       })
     );
-    this.supernovaAuraMesh.position.y = 1.15;
+    this.supernovaAuraMesh.rotation.x = Math.PI / 2;
+    this.supernovaAuraMesh.position.y = 1.05;
     this.supernovaAuraMesh.visible = false;
     this.rootGroup.add(this.supernovaAuraMesh);
 
-    // Flowing 6-node Scarf / Cape Physics Chain attached in world space
+    // Flowing 6-node Scarf / Cape Physics Chain
     this.capeGroup = new THREE.Group();
     for (let i = 0; i < 6; i++) {
       this.capeNodes.push(new THREE.Vector3());
-      const w = 0.42 - i * 0.045;
+      const w = 0.4 - i * 0.045;
       const segMesh = new THREE.Mesh(
         new THREE.BoxGeometry(w, 0.05, 0.24),
-        this.accentMat
+        this.clothMat
       );
       this.capeMeshes.push(segMesh);
       this.capeGroup.add(segMesh);
@@ -316,12 +311,85 @@ export class PlayerFighter {
     scene.add(this.capeGroup);
   }
 
+  /**
+   * Builds unique 3D headwear and body proportions for each of the 5 playable characters
+   * so every character is immediately recognizable on the court.
+   */
+  private rebuildCharacterSilhouette(): void {
+    while (this.characterHatGroup.children.length > 0) {
+      this.characterHatGroup.remove(this.characterHatGroup.children[0]);
+    }
+
+    // Default body proportions
+    this.torsoMesh.scale.set(1, 1, 1);
+
+    if (this.characterId === 'volt') {
+      // KAZE (Wind Strider): Wide Conical Bamboo Straw Ronin Hat (Kasa)
+      const strawMat = new THREE.MeshStandardMaterial({
+        color: 0xd4be94,
+        roughness: 0.85,
+        flatShading: true,
+      });
+      const kasa = new THREE.Mesh(new THREE.ConeGeometry(0.62, 0.26, 12), strawMat);
+      kasa.position.set(0, 0.22, 0);
+      kasa.castShadow = true;
+      this.characterHatGroup.add(kasa);
+    } else if (this.characterId === 'chrono') {
+      // TOKI (Time Keeper): Tall Scholar Crown + Floating Brass Astrolabe Ring behind back
+      const brassMat = new THREE.MeshStandardMaterial({
+        color: 0xc8a45d,
+        roughness: 0.4,
+        metalness: 0.7,
+        flatShading: true,
+      });
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.28, 8), this.clothMat);
+      crown.position.set(0, 0.26, 0);
+      this.characterHatGroup.add(crown);
+
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.56, 0.04, 6, 16), brassMat);
+      halo.position.set(0, -0.35, -0.34);
+      this.characterHatGroup.add(halo);
+    } else if (this.characterId === 'titan') {
+      // GORO (Iron Champion): Broad 1.24x Heavy Armored Build + Horned Samurai Kabuto Crest
+      this.torsoMesh.scale.set(1.24, 1.05, 1.2);
+      const brassMat = new THREE.MeshStandardMaterial({
+        color: 0xd4af37,
+        roughness: 0.4,
+        metalness: 0.75,
+        flatShading: true,
+      });
+      const helm = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.26, 8), this.clothMat);
+      helm.position.set(0, 0.14, 0);
+      this.characterHatGroup.add(helm);
+
+      const crestL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.34, 0.08), brassMat);
+      crestL.position.set(-0.18, 0.3, 0.14);
+      crestL.rotation.z = 0.42;
+      this.characterHatGroup.add(crestL);
+
+      const crestR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.34, 0.08), brassMat);
+      crestR.position.set(0.18, 0.3, 0.14);
+      crestR.rotation.z = -0.42;
+      this.characterHatGroup.add(crestR);
+    } else if (this.characterId === 'phantom') {
+      // KAGE (Shadow Rogue): Shinobi Cowl Hood + Face Mask
+      const hood = new THREE.Mesh(new THREE.OctahedronGeometry(0.29, 1), this.clothMat);
+      hood.position.set(0, 0.06, -0.03);
+      this.characterHatGroup.add(hood);
+    } else if (this.characterId === 'aegis') {
+      // TATSU (Temple Warden): Crested Sentinel Helm + Wide Shoulder Plates
+      this.torsoMesh.scale.set(1.12, 1.0, 1.12);
+      const crest = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.46), this.trimMat);
+      crest.position.set(0, 0.24, 0);
+      this.characterHatGroup.add(crest);
+    }
+  }
+
   public setLoadout(characterId: CharacterId, batId: BatId): void {
     this.characterId = characterId;
     this.characterDef = getCharacterDefinition(characterId);
-    this.accentMat.color.setHex(this.characterDef.accentHex);
-    this.accentMat.emissive.setHex(this.characterDef.emissiveHex);
-    this.visorMat.emissive.setHex(this.characterDef.accentHex);
+    this.clothMat.color.setHex(this.characterDef.accentHex);
+    this.rebuildCharacterSilhouette();
 
     if (this.batId !== batId) {
       this.batId = batId;
@@ -336,6 +404,8 @@ export class PlayerFighter {
   public respawn(spawnPos: THREE.Vector3, facingYaw: number): void {
     this.alive = true;
     this.position.copy(spawnPos);
+    this.prevPosition.copy(spawnPos);
+    this.renderPosition.copy(spawnPos);
     this.velocity.set(0, 0, 0);
     this.facingYaw = facingYaw;
     this.aimDirection.set(-Math.sin(facingYaw), 0, -Math.cos(facingYaw));
@@ -376,7 +446,7 @@ export class PlayerFighter {
   }
 
   public getParryReach(): number {
-    return 3.35 + this.characterDef.parryReachBonus;
+    return 3.55 + this.characterDef.parryReachBonus;
   }
 
   public isInvulnerable(): boolean {
@@ -389,7 +459,7 @@ export class PlayerFighter {
       this.velocity.y = JUMP_SPEED;
       this.isGrounded = false;
       this.coyoteTimer = 0;
-      this.squashStretch = 1.28;
+      this.squashStretch = 1.24;
       gameEvents.emit('jump', {
         playerId: this.id,
         position: this.position,
@@ -399,8 +469,8 @@ export class PlayerFighter {
     } else if (this.doubleJumpAvailable) {
       this.velocity.y = DOUBLE_JUMP_SPEED;
       this.doubleJumpAvailable = false;
-      this.flipAnimTimer = 0.38;
-      this.squashStretch = 1.24;
+      this.flipAnimTimer = 0.36;
+      this.squashStretch = 1.2;
       gameEvents.emit('jump', {
         playerId: this.id,
         position: this.position,
@@ -444,7 +514,7 @@ export class PlayerFighter {
     if (this.parryActiveTimer > 0 || this.parryWhiffTimer > 0) return false;
 
     this.parryActiveTimer = PARRY_ACTIVE_WINDOW;
-    this.swingAnimTimer = 0.32;
+    this.swingAnimTimer = 0.3;
     this.swingIsBunt = isBunt;
     this.swingResolved = false;
     this.lastSwingTimestamp = simClock;
@@ -454,7 +524,7 @@ export class PlayerFighter {
   public onParrySucceeded(): void {
     this.swingResolved = true;
     this.parryActiveTimer = 0;
-    this.parryWhiffTimer = 0.08; // Brief clean follow-through so player can rally rapid Volleys
+    this.parryWhiffTimer = 0.07;
   }
 
   public update(
@@ -470,13 +540,13 @@ export class PlayerFighter {
   ): void {
     if (!this.alive) return;
 
+    this.prevPosition.copy(this.position);
     this.animClock += dt;
     this.moveInputDir.copy(wishMoveDir);
     if (aimDir.lengthSq() > 0.001) {
       this.aimDirection.copy(aimDir).normalize();
     }
 
-    // Cooldowns & timers
     if (this.dashCooldown > 0) this.dashCooldown = Math.max(0, this.dashCooldown - dt);
     if (this.iframeTimer > 0) this.iframeTimer = Math.max(0, this.iframeTimer - dt);
     if (this.abilityCooldown > 0) this.abilityCooldown = Math.max(0, this.abilityCooldown - dt);
@@ -486,13 +556,11 @@ export class PlayerFighter {
     if (this.flipAnimTimer > 0) this.flipAnimTimer = Math.max(0, this.flipAnimTimer - dt);
     if (this.swingAnimTimer > 0) this.swingAnimTimer = Math.max(0, this.swingAnimTimer - dt);
 
-    // Parry active window & whiff transition
     if (this.parryActiveTimer > 0) {
       this.parryActiveTimer -= dt;
       if (this.parryActiveTimer <= 0) {
         this.parryActiveTimer = 0;
         if (!this.swingResolved) {
-          // Early swing whiff penalty (450ms recovery scaled by character passive)
           this.parryWhiffTimer = BASE_WHIFF_RECOVERY * this.characterDef.whiffRecoveryMultiplier;
           gameEvents.emit('whiff', {
             playerId: this.id,
@@ -504,7 +572,6 @@ export class PlayerFighter {
       this.parryWhiffTimer = Math.max(0, this.parryWhiffTimer - dt);
     }
 
-    // Speed multiplier (character passive + Volt Overdrive speed boost + Chrono Reflex)
     let speedMult = this.characterDef.speedMultiplier;
     if (this.characterId === 'chrono' && isBallLockedOnMe) {
       speedMult *= 1.08;
@@ -520,12 +587,11 @@ export class PlayerFighter {
       this.velocity.z = this.dashDirection.z * DASH_SPEED;
 
       this.afterimageSpawnAccum += dt;
-      if (this.afterimageSpawnAccum >= 0.032 && onSpawnAfterimage) {
+      if (this.afterimageSpawnAccum >= 0.036 && onSpawnAfterimage) {
         this.afterimageSpawnAccum = 0;
         onSpawnAfterimage(this.position, this.facingYaw, this.characterDef.accentHex);
       }
     } else {
-      // Standard ground / aerial acceleration with momentum preservation in air
       this._wishDir.copy(wishMoveDir).setY(0);
       const hasInput = this._wishDir.lengthSq() > 0.01;
       if (hasInput) {
@@ -553,13 +619,9 @@ export class PlayerFighter {
       }
     }
 
-    // Gravity
     this.velocity.y -= GRAVITY * dt;
-
-    // Integrate position
     this.position.addScaledVector(this.velocity, dt);
 
-    // Arena obstacles, platforms & perimeter collision
     const { groundHeight } = resolveFighterCollisions(
       this.position,
       this.velocity,
@@ -570,10 +632,9 @@ export class PlayerFighter {
     );
     this.groundY = groundHeight;
 
-    // Ground landing & Coyote Time
     if (this.position.y <= groundHeight) {
       if (!this.isGrounded && this.velocity.y < -4.0) {
-        this.squashStretch = 0.76; // Landing squash
+        this.squashStretch = 0.8;
       }
       this.position.y = groundHeight;
       this.velocity.y = 0;
@@ -589,7 +650,6 @@ export class PlayerFighter {
       }
     }
 
-    // Check Arena Jump Pads
     for (let i = 0; i < jumpPads.length; i++) {
       const pad = jumpPads[i];
       const dx = this.position.x - pad.position.x;
@@ -603,7 +663,7 @@ export class PlayerFighter {
         this.isGrounded = false;
         this.coyoteTimer = 0;
         this.doubleJumpAvailable = true;
-        this.squashStretch = 1.35;
+        this.squashStretch = 1.28;
         gameEvents.emit('jump', {
           playerId: this.id,
           position: this.position,
@@ -612,7 +672,6 @@ export class PlayerFighter {
       }
     }
 
-    // Smooth facing orientation (face aim direction during combat or movement direction when sprinting)
     const desiredYaw =
       this.swingAnimTimer > 0 || isBallLockedOnMe
         ? Math.atan2(-this.aimDirection.x, -this.aimDirection.z)
@@ -625,40 +684,43 @@ export class PlayerFighter {
     while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
     this.facingYaw += yawDiff * Math.min(1, dt * 16);
 
-    // Update procedural 3D animations, target ring, and flowing cape
+    this.renderPosition.copy(this.position);
     this.updateProceduralAnimation(dt, isBallLockedOnMe);
   }
 
+  public updateRenderInterpolation(alpha: number): void {
+    if (!this.alive) return;
+    this.renderPosition.lerpVectors(this.prevPosition, this.position, alpha);
+    this.rootGroup.position.copy(this.renderPosition);
+  }
+
   private updateProceduralAnimation(dt: number, isBallLockedOnMe: boolean): void {
-    this.rootGroup.position.copy(this.position);
+    this.rootGroup.position.copy(this.renderPosition);
     this.rootGroup.rotation.y = this.facingYaw;
 
-    // Squash & stretch recovery
     this.squashStretch = THREE.MathUtils.lerp(this.squashStretch, 1.0, Math.min(1, dt * 14));
     const invScale = 1 / Math.sqrt(this.squashStretch);
     this.bodyGroup.scale.set(invScale, this.squashStretch, invScale);
 
-    // Sprint lean & mid-air double-jump flip
     const horizSpeed = Math.hypot(this.velocity.x, this.velocity.z);
     const speedRatio = Math.min(1, horizSpeed / BASE_MOVE_SPEED);
 
     if (this.flipAnimTimer > 0) {
-      const flipProgress = 1 - this.flipAnimTimer / 0.38;
+      const flipProgress = 1 - this.flipAnimTimer / 0.36;
       this.bodyGroup.rotation.x = -flipProgress * Math.PI * 2;
     } else {
       this.bodyGroup.rotation.x = THREE.MathUtils.lerp(
         this.bodyGroup.rotation.x,
-        -speedRatio * 0.22,
+        -speedRatio * 0.2,
         Math.min(1, dt * 12)
       );
     }
 
-    // Leg sprint stride cycle
     if (this.isGrounded && speedRatio > 0.1) {
-      const stride = Math.sin(this.animClock * 13) * 0.68 * speedRatio;
+      const stride = Math.sin(this.animClock * 13) * 0.65 * speedRatio;
       this.leftLegPivot.rotation.x = stride;
       this.rightLegPivot.rotation.x = -stride;
-      this.leftArmPivot.rotation.x = -stride * 0.65;
+      this.leftArmPivot.rotation.x = -stride * 0.6;
     } else if (!this.isGrounded) {
       this.leftLegPivot.rotation.x = 0.35;
       this.rightLegPivot.rotation.x = -0.25;
@@ -669,17 +731,16 @@ export class PlayerFighter {
       this.leftArmPivot.rotation.x = THREE.MathUtils.lerp(this.leftArmPivot.rotation.x, 0, dt * 10);
     }
 
-    // Dramatic 3D wind-up + slash follow-through pose & 3D Ribbon Slash Arc
     if (this.swingAnimTimer > 0) {
-      const p = 1 - this.swingAnimTimer / 0.32;
-      const swingAngle = THREE.MathUtils.lerp(-1.4, 1.55, Math.min(1, p * 1.8));
+      const p = 1 - this.swingAnimTimer / 0.3;
+      const swingAngle = THREE.MathUtils.lerp(-1.35, 1.5, Math.min(1, p * 1.8));
       this.rightArmPivot.rotation.y = -swingAngle;
       this.rightArmPivot.rotation.x = -0.75;
-      this.torsoMesh.rotation.y = -swingAngle * 0.35;
+      this.torsoMesh.rotation.y = -swingAngle * 0.32;
 
       this.batRig.slashRibbon.visible = true;
-      this.batRig.slashRibbon.rotation.y = swingAngle * 0.35;
-      this.batRig.slashMaterial.opacity = Math.max(0, Math.sin(p * Math.PI) * 0.88);
+      this.batRig.slashRibbon.rotation.y = swingAngle * 0.32;
+      this.batRig.slashMaterial.opacity = Math.max(0, Math.sin(p * Math.PI) * 0.65);
     } else {
       this.rightArmPivot.rotation.y = THREE.MathUtils.lerp(
         this.rightArmPivot.rotation.y,
@@ -699,40 +760,33 @@ export class PlayerFighter {
       this.batRig.slashRibbon.visible = false;
     }
 
-    // Contact shadow blob pinned to floor height beneath fighter
     const heightAboveFloor = Math.max(0, this.position.y - this.groundY);
     this.shadowBlob.position.y = -heightAboveFloor + 0.03;
     const shadowScale = Math.max(0.35, 1 - heightAboveFloor * 0.14);
     this.shadowBlob.scale.setScalar(shadowScale);
 
-    // Target Lock-On Crimson Ring pulsing around fighter
     this.targetLockRing.visible = isBallLockedOnMe;
     if (isBallLockedOnMe) {
-      const pulse = 1 + Math.sin(this.animClock * 16) * 0.12;
+      const pulse = 1 + Math.sin(this.animClock * 14) * 0.1;
       this.targetLockRing.scale.set(pulse, 1, pulse);
-      this.targetLockRing.rotation.y += dt * 4.5;
     }
 
-    // Aegis Kinetic Dome & Titan Supernova Aura
     this.kineticDomeMesh.visible = this.kineticDomeTimer > 0;
     if (this.kineticDomeTimer > 0) {
-      this.kineticDomeMesh.rotation.y += dt * 3.8;
-      this.kineticDomeMesh.rotation.x += dt * 1.9;
+      this.kineticDomeMesh.rotation.y += dt * 3.0;
     }
 
     this.supernovaAuraMesh.visible = this.supernovaTimer > 0;
     if (this.supernovaTimer > 0) {
-      this.supernovaAuraMesh.rotation.y -= dt * 5.2;
-      const s = 1 + Math.sin(this.animClock * 20) * 0.12;
+      const s = 1 + Math.sin(this.animClock * 16) * 0.1;
       this.supernovaAuraMesh.scale.setScalar(s);
     }
 
-    // Update 6-node Verlet/Spring Cape Chain
     const backX = Math.sin(this.facingYaw);
     const backZ = Math.cos(this.facingYaw);
     this._capeAnchor.set(
       this.position.x + backX * 0.26,
-      this.position.y + 1.48,
+      this.position.y + 1.46,
       this.position.z + backZ * 0.26
     );
     this.capeNodes[0].copy(this._capeAnchor);
@@ -742,12 +796,10 @@ export class PlayerFighter {
       const prev = this.capeNodes[i - 1];
       const curr = this.capeNodes[i];
 
-      // Gravity + trailing wave flutter
       curr.y -= 5.8 * dt;
-      curr.x += backX * 2.2 * dt + Math.sin(this.animClock * 10 + i) * 0.4 * dt;
-      curr.z += backZ * 2.2 * dt + Math.cos(this.animClock * 10 + i) * 0.4 * dt;
+      curr.x += backX * 2.2 * dt + Math.sin(this.animClock * 10 + i) * 0.35 * dt;
+      curr.z += backZ * 2.2 * dt + Math.cos(this.animClock * 10 + i) * 0.35 * dt;
 
-      // Distance constraint
       const dx = curr.x - prev.x;
       const dy = curr.y - prev.y;
       const dz = curr.z - prev.z;
@@ -759,7 +811,6 @@ export class PlayerFighter {
         curr.z -= dz * pull * 0.88;
       }
 
-      // Prevent clipping into floor
       const minY = this.groundY + 0.12;
       if (curr.y < minY) curr.y = minY;
     }

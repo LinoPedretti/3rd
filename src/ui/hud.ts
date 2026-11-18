@@ -148,12 +148,10 @@ export class DiegeticHUD {
 
     // 1. Speedometer
     this.tierEl.textContent = tier.label;
-    this.tierEl.style.color = tier.cssColor;
     this.kmhEl.textContent = `${kmh}`;
-    this.kmhEl.style.color = tier.cssColor;
     this.machEl.textContent = `MACH ${mach.toFixed(2)}`;
-    this.machEl.style.color = tier.cssColor;
-    this.speedCard.style.borderColor = tier.cssColor;
+    this.speedCard.style.borderColor =
+      ball.targetId === player.id ? '#e53e3e' : 'rgba(255, 255, 255, 0.28)';
 
     // 2. Announcement Banner
     if (match.bannerTimer > 0 && match.bannerAnnouncement) {
@@ -169,24 +167,28 @@ export class DiegeticHUD {
     const isLockedOnPlayer = ball.targetId === player.id;
 
     if (player.parryWhiffTimer > 0) {
-      this.outerRingCircle.setAttribute('stroke', '#ffb300');
-      this.outerRingCircle.setAttribute('stroke-width', '3');
-      this.crosshairStatusEl.textContent = 'RECOVERY';
-      this.crosshairStatusEl.style.color = '#ffb300';
-    } else if (inParryRange) {
-      this.outerRingCircle.setAttribute('stroke', '#00e676');
-      this.outerRingCircle.setAttribute('stroke-width', '4.5');
-      this.crosshairStatusEl.textContent = 'STRIKE NOW!';
-      this.crosshairStatusEl.style.color = '#00e676';
-    } else if (isLockedOnPlayer) {
-      this.outerRingCircle.setAttribute('stroke', '#ff1744');
+      this.outerRingCircle.setAttribute('stroke', '#d69e2e');
       this.outerRingCircle.setAttribute('stroke-width', '3.5');
-      this.crosshairStatusEl.textContent = 'LOCKED ON YOU!';
-      this.crosshairStatusEl.style.color = '#ff1744';
+      this.crosshairStatusEl.textContent = 'RECOVERY';
+      this.crosshairStatusEl.style.display = 'block';
+      this.crosshairStatusEl.style.color = '#f6e05e';
+    } else if (inParryRange) {
+      this.outerRingCircle.setAttribute('stroke', '#2f855a');
+      this.outerRingCircle.setAttribute('stroke-width', '5');
+      this.crosshairStatusEl.textContent = 'STRIKE NOW!';
+      this.crosshairStatusEl.style.display = 'block';
+      this.crosshairStatusEl.style.color = '#68d391';
+    } else if (isLockedOnPlayer) {
+      this.outerRingCircle.setAttribute('stroke', '#c53030');
+      this.outerRingCircle.setAttribute('stroke-width', '4');
+      this.crosshairStatusEl.textContent = 'INCOMING!';
+      this.crosshairStatusEl.style.display = 'block';
+      this.crosshairStatusEl.style.color = '#fc8181';
     } else {
-      this.outerRingCircle.setAttribute('stroke', 'rgba(255,255,255,0.28)');
-      this.outerRingCircle.setAttribute('stroke-width', '2');
+      this.outerRingCircle.setAttribute('stroke', 'rgba(26, 32, 44, 0.55)');
+      this.outerRingCircle.setAttribute('stroke-width', '2.5');
       this.crosshairStatusEl.textContent = '';
+      this.crosshairStatusEl.style.display = 'none';
     }
 
     // 4. Radial Dash & Ability Cooldown Arcs around Crosshair
@@ -198,7 +200,7 @@ export class DiegeticHUD {
     );
     this.dashArcPath.setAttribute(
       'stroke',
-      player.dashCooldown <= 0 ? '#00e5ff' : 'rgba(0, 229, 255, 0.28)'
+      player.dashCooldown <= 0 ? '#1a202c' : 'rgba(26, 32, 44, 0.25)'
     );
 
     const abilCircum = 2 * Math.PI * 60;
@@ -210,7 +212,7 @@ export class DiegeticHUD {
     );
     this.abilityArcPath.setAttribute(
       'stroke',
-      player.abilityCooldown <= 0 ? player.characterDef.cssColor : 'rgba(255, 255, 255, 0.22)'
+      player.abilityCooldown <= 0 ? '#2f855a' : 'rgba(26, 32, 44, 0.25)'
     );
 
     // 5. Bottom Bar Labels

@@ -163,7 +163,7 @@ export class MatchDirector {
       const f = this.fighters[i];
       if (i < 2) {
         const angle = i === 0 ? 0 : Math.PI;
-        const r = 10.5;
+        const r = 16.5;
         this._spawnPos.set(Math.sin(angle) * r, 0, Math.cos(angle) * r);
         f.setLoadout(
           i === 0 ? this.progression.data.equippedCharacter : 'volt',
@@ -175,8 +175,8 @@ export class MatchDirector {
       }
     }
 
-    this._spawnPos.set(0, 2.2, 0);
-    this._initDir.set(0, 0.1, 1).normalize();
+    this._spawnPos.set(0, 1.25, 0);
+    this._initDir.set(0, 0, 1).normalize();
     this.ball.reset(this._spawnPos, this._initDir, this.fighters[0].id);
   }
 
@@ -242,7 +242,7 @@ export class MatchDirector {
     this.bannerTimer = 1.65;
 
     const activeCount = this.mode === 'ffa_4p' ? 4 : this.mode === 'duel_1v1' ? 2 : 1;
-    const spawnR = this.arena.currentArenaId === 'reactor_core' ? 14.2 : 12.5;
+    const spawnR = this.arena.currentArenaId === 'reactor_core' ? 21.0 : 19.0;
 
     for (let i = 0; i < 4; i++) {
       const f = this.fighters[i];
@@ -261,15 +261,15 @@ export class MatchDirector {
     if (this.mode === 'endless_gauntlet') {
       this.droneGroup.visible = true;
       this.droneAngle = Math.PI;
-      this.dronePosition.set(0, 2.8, -11.5);
+      this.dronePosition.set(0, 1.8, -18.5);
       this.droneGroup.position.copy(this.dronePosition);
     } else {
       this.droneGroup.visible = false;
     }
 
-    const ballStartY = this.arena.currentArenaId === 'reactor_core' ? 3.2 : 2.2;
+    const ballStartY = this.arena.currentArenaId === 'reactor_core' ? 2.5 : 1.25;
     this._spawnPos.set(0, ballStartY, 0);
-    this._initDir.set(0, 0.15, 1).normalize();
+    this._initDir.set(0, 0, 1).normalize();
     const firstTarget =
       activeCount > 1
         ? this.fighters[Math.floor(Math.random() * activeCount)].id
@@ -527,13 +527,9 @@ export class MatchDirector {
       attacker.eliminationsThisMatch++;
     }
 
-    this.vfx.spawnShockwaveRing(victim.position, 0xff1744, 6.2);
-    this.vfx.spawnParticleBurst(victim.position, 0xff1744, 40, 14.0);
-    this.tpsCamera.addTrauma(0.65);
-
-    if (this.onTriggerHitstopCallback) {
-      this.onTriggerHitstopCallback(0.11);
-    }
+    this.vfx.spawnShockwaveRing(victim.position, 0xc53030, 5.0);
+    this.vfx.spawnParticleBurst(victim.position, 0xc53030, 24, 10.0);
+    this.tpsCamera.addTrauma(0.45);
 
     gameEvents.emit('elimination', {
       victimId: victim.id,
