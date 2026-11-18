@@ -1,0 +1,609 @@
+:root {
+  --bg-dark: #050811;
+  --glass-bg: rgba(10, 16, 30, 0.72);
+  --glass-border: rgba(0, 229, 255, 0.28);
+  --cyan: #00e5ff;
+  --amber: #ffb300;
+  --crimson: #ff1744;
+  --violet: #d500f9;
+  --emerald: #00e676;
+  --text-main: #f0f6ff;
+  --text-dim: #8da2c0;
+  --font-display: 'Orbitron', sans-serif;
+  --font-body: 'Chakra Petch', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-dark);
+  color: var(--text-main);
+  font-family: var(--font-body);
+}
+
+#game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#hud-root,
+#menu-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ==================== DEBUG OVERLAY ==================== */
+#debug-overlay {
+  position: absolute;
+  bottom: 72px;
+  left: 16px;
+  z-index: 200;
+  background: rgba(5, 8, 17, 0.85);
+  border: 1px solid rgba(0, 229, 255, 0.45);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #00e5ff;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+/* ==================== DIEGETIC HUD ==================== */
+.hud-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud-top-bar {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.speedometer-card {
+  background: rgba(8, 13, 25, 0.78);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  border-radius: 12px;
+  padding: 10px 26px;
+  min-width: 310px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+  transition: border-color 0.2s ease;
+}
+
+.speedometer-tier {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.speedometer-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+}
+
+.speedometer-kmh {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  line-height: 1.05;
+}
+
+.speedometer-unit {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.speedometer-mach {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.round-pips-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.fighter-score-pill {
+  background: rgba(9, 15, 28, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 5px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.fighter-score-pill.dead {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+
+.pip-row {
+  display: flex;
+  gap: 4px;
+}
+
+.round-pip {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.round-pip.filled {
+  background: var(--cyan);
+  box-shadow: 0 0 8px var(--cyan);
+  border-color: #ffffff;
+}
+
+/* ==================== DYNAMIC CROSSHAIR & RADIAL ARCS ==================== */
+.hud-crosshair-wrapper {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 160px;
+  height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crosshair-svg {
+  width: 150px;
+  height: 150px;
+  overflow: visible;
+}
+
+.crosshair-status-label {
+  position: absolute;
+  bottom: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  white-space: nowrap;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+}
+
+/* ==================== ANNOUNCEMENT BANNER ==================== */
+.hud-banner {
+  position: absolute;
+  top: 24%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: #ffffff;
+  text-shadow: 0 0 24px rgba(0, 229, 255, 0.85);
+  text-align: center;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* ==================== BOTTOM CONTROLS & COOLDOWN BAR ==================== */
+.hud-bottom-bar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(8, 13, 26, 0.78);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 8px 18px;
+}
+
+.hud-key-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.hud-key-badge {
+  background: rgba(0, 229, 255, 0.14);
+  border: 1px solid rgba(0, 229, 255, 0.45);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.hud-top-right {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+  display: flex;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.hud-action-btn {
+  background: rgba(10, 16, 30, 0.82);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  color: var(--text-main);
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.hud-action-btn:hover {
+  background: rgba(0, 229, 255, 0.22);
+  border-color: var(--cyan);
+}
+
+/* ==================== GLASSMORPHIC MAIN MENU & ARMORY ==================== */
+.menu-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 28px 40px;
+  pointer-events: auto;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(5, 8, 17, 0.15) 0%,
+    rgba(5, 8, 17, 0.72) 100%
+  );
+}
+
+.menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.brand-title {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  background: linear-gradient(90deg, #ffffff 0%, #00e5ff 55%, #b388ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 32px rgba(0, 229, 255, 0.35);
+}
+
+.brand-subtitle {
+  font-size: 13px;
+  letter-spacing: 2.8px;
+  color: var(--cyan);
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.profile-coins-pill {
+  background: rgba(10, 16, 30, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 179, 0, 0.55);
+  border-radius: 10px;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  color: #ffd740;
+}
+
+.menu-main-grid {
+  display: grid;
+  grid-template-columns: 370px 1fr;
+  gap: 28px;
+  align-items: end;
+  max-width: 1320px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+
+.panel-heading {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--cyan);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.selector-group {
+  margin-bottom: 14px;
+}
+
+.selector-options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+}
+
+.selector-options.row-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.selector-options.row-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.option-btn {
+  background: rgba(16, 24, 44, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.option-btn:hover {
+  border-color: rgba(0, 229, 255, 0.55);
+  background: rgba(0, 229, 255, 0.1);
+}
+
+.option-btn.selected {
+  border-color: var(--cyan);
+  background: rgba(0, 229, 255, 0.2);
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.25);
+}
+
+.option-btn-title {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  display: block;
+}
+
+.option-btn-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+  display: block;
+}
+
+.launch-btn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.btn-primary-launch {
+  flex: 1;
+  background: linear-gradient(135deg, #00e5ff 0%, #0077ff 100%);
+  border: none;
+  border-radius: 10px;
+  padding: 14px 20px;
+  color: #040812;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 1.8px;
+  cursor: pointer;
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.45);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.btn-primary-launch:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 32px rgba(0, 229, 255, 0.75);
+}
+
+.btn-secondary-tab {
+  background: rgba(20, 30, 54, 0.85);
+  border: 1px solid rgba(0, 229, 255, 0.45);
+  border-radius: 10px;
+  padding: 14px 18px;
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary-tab:hover {
+  background: rgba(0, 229, 255, 0.2);
+}
+
+/* ==================== ARMORY GRID ==================== */
+.armory-panel {
+  max-height: 76vh;
+  overflow-y: auto;
+}
+
+.armory-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.armory-card {
+  background: rgba(14, 21, 38, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 11px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.armory-card.equipped {
+  border-color: var(--cyan);
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.25);
+}
+
+.armory-card-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.armory-card-role {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  opacity: 0.9;
+}
+
+.armory-card-ability {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.35;
+}
+
+.armory-action-btn {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.armory-action-btn.equipped {
+  background: rgba(0, 230, 118, 0.22);
+  border-color: var(--emerald);
+  color: var(--emerald);
+}
+
+.armory-action-btn.unlockable {
+  background: rgba(255, 179, 0, 0.2);
+  border-color: var(--amber);
+  color: #ffd740;
+}
+
+/* ==================== POST-MATCH MVP & STATS CARD ==================== */
+.post-match-backdrop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 7, 15, 0.78);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+}
+
+.mvp-card {
+  width: 560px;
+  max-width: 92vw;
+  background: rgba(10, 16, 32, 0.92);
+  border: 1px solid rgba(0, 229, 255, 0.5);
+  border-radius: 16px;
+  padding: 26px 30px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.75);
+  text-align: center;
+}
+
+.mvp-outcome-title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  margin-bottom: 6px;
+}
+
+.mvp-badge-box {
+  margin: 14px 0;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.stats-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.stat-tile {
+  background: rgba(16, 25, 46, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px 8px;
+}
+
+.stat-tile-val {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--cyan);
+}
+
+.stat-tile-lbl {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
